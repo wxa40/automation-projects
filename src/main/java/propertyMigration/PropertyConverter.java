@@ -18,7 +18,7 @@ import static java.util.Objects.requireNonNull;
 /**
  * @author wxa40
  * @since 01/03/2021
- *
+ * <p>
  * Service for the conversion of property files to JSON objects so that they can easily be copied over to HashiCorp Vault as part of the
  * process of migrating an application from on-premise deployment to GCP.
  */
@@ -28,19 +28,19 @@ public class PropertyConverter {
     private static final String SERVER_PORT_VALUE = "8080";
     private static final String SERVER_SSL_KEY_STORE_KEY = "server.ssl.key-store";
     private static final String SERVER_SSL_KEY_STORE_PREFIX = "/home/efx_container_user";
+    private static final String JASYPT_ENCRYPTOR_PASSWORD = "jasypt.encryptor.password";
 
     // Service objects
-    private static final BasicTextEncryptor basicTextEncryptor = new BasicTextEncryptor();
+    private static BasicTextEncryptor basicTextEncryptor = new BasicTextEncryptor();
     private static final Scanner scanner = new Scanner(System.in);
-
-    // Paths
-    private static String directoryPath;
-    private static String defaultProfilePath;
-
+    private static String jasyptKey;
     // Maps
     private static final Map<String, String> profilePaths = new HashMap<>();
     private static final Map<String, String> defaultProfile = new HashMap<>();
     private static final Map<String, JSONObject> profiles = new HashMap<>();
+    // Paths
+    private static String directoryPath;
+    private static String defaultProfilePath;
 
     public static void main(String[] args) {
         setJasyptKey();
@@ -67,7 +67,8 @@ public class PropertyConverter {
 
     private static void setJasyptKey() {
         System.out.print("Enter the Jasypt key for this project: ");
-        basicTextEncryptor.setPassword(scanner.nextLine());
+        jasyptKey = scanner.nextLine();
+        basicTextEncryptor.setPassword(jasyptKey);
     }
 
     private static void setDirectory() {
@@ -133,6 +134,9 @@ public class PropertyConverter {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        basicTextEncryptor = new BasicTextEncryptor();
+        basicTextEncryptor.setPassword(jasyptKey);
     }
 
     private static String checkMultiLine(String line, BufferedReader reader) throws IOException {
@@ -147,7 +151,7 @@ public class PropertyConverter {
             nextLine = nextLine.strip(); // Get rid of whitespace trails and leads
 
             if (nextLine.endsWith("\\")) {
-                line = line + nextLine.substring(0, nextLine.length() - 1) + " " ; // Take the backslash off the end and append it
+                line = line + nextLine.substring(0, nextLine.length() - 1) + " "; // Take the backslash off the end and append it
             } else {
                 line = line + nextLine; // Append and exit the loop
                 break;
@@ -164,6 +168,17 @@ public class PropertyConverter {
 
         String key = line.substring(0, split);
         String value = line.substring(split + 1);
+
+        if (key.equals(JASYPT_ENCRYPTOR_PASSWORD)) {
+            if (value.startsWith("${") && value.endsWith("}")) {
+                return;
+            }
+
+            basicTextEncryptor = new BasicTextEncryptor();
+            basicTextEncryptor.setPassword(value);
+
+            return;
+        }
 
         // Check to see if the property is encrypted and decrypt it if it is
         if (value.startsWith("ENC(") && value.endsWith(")")) {
